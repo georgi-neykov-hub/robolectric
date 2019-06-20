@@ -29,6 +29,7 @@ import static android.os.Build.VERSION_CODES.N;
 import static android.os.Build.VERSION_CODES.O;
 import static android.os.Build.VERSION_CODES.O_MR1;
 import static android.os.Build.VERSION_CODES.P;
+import static android.os.Build.VERSION_CODES.Q;
 import static org.robolectric.shadow.api.Shadow.invokeConstructor;
 import static org.robolectric.util.ReflectionHelpers.ClassParameter.from;
 
@@ -75,6 +76,7 @@ import android.os.Build.VERSION_CODES;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Parcel;
+import android.os.Parcelable;
 import android.os.PersistableBundle;
 import android.os.RemoteException;
 import android.os.UserHandle;
@@ -1572,6 +1574,18 @@ public class ShadowApplicationPackageManager extends ShadowPackageManager {
     return null;
   }
 
+  @Implementation(minSdk = Q)
+  protected String[] setPackagesSuspendedAsUser(
+      String[] packageNames,
+      boolean suspended,
+      PersistableBundle appExtras,
+      PersistableBundle launcherExtras,
+      /* SuspendDialogInfo */ Object suspendDialogInfo,
+      String callingPackage,
+      int userId) {
+    return null;
+  }
+
   @Implementation(minSdk = N)
   protected boolean isPackageSuspendedForUser(String packageName, int userId) {
     return false;
@@ -1740,6 +1754,29 @@ public class ShadowApplicationPackageManager extends ShadowPackageManager {
       PersistableBundle appExtras,
       PersistableBundle launcherExtras,
       String dialogMessage) {
+    return setPackagesSuspended(
+        packageNames, suspended, appExtras, launcherExtras, dialogMessage, /* dialogInfo= */ null);
+  }
+
+  @Implementation(minSdk = Q)
+  @HiddenApi
+  protected String[] setPackagesSuspended(
+      String[] packageNames,
+      boolean suspended,
+      PersistableBundle appExtras,
+      PersistableBundle launcherExtras,
+      /* SuspendDialogInfo */ Parcelable dialogInfo) {
+    return setPackagesSuspended(
+        packageNames, suspended, appExtras, launcherExtras, /* dialogMessage= */ null, dialogInfo);
+  }
+
+  private String[] setPackagesSuspended(
+      String[] packageNames,
+      boolean suspended,
+      PersistableBundle appExtras,
+      PersistableBundle launcherExtras,
+      String dialogMessage,
+      Parcelable dialogInfo) {
     if (hasProfileOwnerOrDeviceOwnerOnCurrentUser()) {
       throw new UnsupportedOperationException();
     }
@@ -1754,7 +1791,7 @@ public class ShadowApplicationPackageManager extends ShadowPackageManager {
         unupdatedPackages.add(packageName);
         continue;
       }
-      setting.setSuspended(suspended, dialogMessage, appExtras, launcherExtras);
+      setting.setSuspended(suspended, dialogMessage, dialogInfo, appExtras, launcherExtras);
     }
     return unupdatedPackages.toArray(new String[0]);
   }

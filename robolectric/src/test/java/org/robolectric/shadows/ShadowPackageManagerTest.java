@@ -72,12 +72,14 @@ import android.content.pm.ProviderInfo;
 import android.content.pm.ResolveInfo;
 import android.content.pm.ServiceInfo;
 import android.content.pm.Signature;
+import android.content.pm.SuspendDialogInfo;
 import android.content.res.XmlResourceParser;
 import android.graphics.Color;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Parcelable;
 import android.os.PersistableBundle;
 import android.os.Process;
 import android.provider.DocumentsContract;
@@ -2905,7 +2907,21 @@ public class ShadowPackageManagerTest {
         /* suspended= */ true,
         /* appExtras= */ null,
         /* launcherExtras= */ null,
-        /* dialogMessage= */ null);
+        /* dialogMessage= */ (String) null);
+    assertThat(packageManager.isPackageSuspended(TEST_PACKAGE_NAME)).isTrue();
+  }
+
+  @Test
+  @Config(minSdk = android.os.Build.VERSION_CODES.Q)
+  public void isPackageSuspended_installedSuspendedPackage_suspendDialogInfo_shouldReturnTrue()
+      throws NameNotFoundException {
+    shadowOf(packageManager).installPackage(createPackageInfoWithPackageName(TEST_PACKAGE_NAME));
+    setPackagesSuspended(
+        new String[] {TEST_PACKAGE_NAME},
+        /* suspended= */ true,
+        /* appExtras= */ null,
+        /* launcherExtras= */ null,
+        /* suspendDialogInfo= */ (SuspendDialogInfo) null);
     assertThat(packageManager.isPackageSuspended(TEST_PACKAGE_NAME)).isTrue();
   }
 
@@ -2919,13 +2935,33 @@ public class ShadowPackageManagerTest {
         /* suspended= */ true,
         /* appExtras= */ null,
         /* launcherExtras= */ null,
-        /* dialogMessage= */ null);
+        /* dialogMessage= */ (String) null);
     setPackagesSuspended(
         new String[] {TEST_PACKAGE_NAME},
         /* suspended= */ false,
         /* appExtras= */ null,
         /* launcherExtras= */ null,
-        /* dialogMessage= */ null);
+        /* dialogMessage= */ (String) null);
+    assertThat(packageManager.isPackageSuspended(TEST_PACKAGE_NAME)).isFalse();
+  }
+
+  @Test
+  @Config(minSdk = android.os.Build.VERSION_CODES.Q)
+  public void isPackageSuspended_installedUnsuspendedPackage_suspendDialogInfo_shouldReturnFalse()
+      throws NameNotFoundException {
+    shadowOf(packageManager).installPackage(createPackageInfoWithPackageName(TEST_PACKAGE_NAME));
+    setPackagesSuspended(
+        new String[] {TEST_PACKAGE_NAME},
+        /* suspended= */ true,
+        /* appExtras= */ null,
+        /* launcherExtras= */ null,
+        /* suspendDialogInfo= */ (SuspendDialogInfo) null);
+    setPackagesSuspended(
+        new String[] {TEST_PACKAGE_NAME},
+        /* suspended= */ false,
+        /* appExtras= */ null,
+        /* launcherExtras= */ null,
+        /* suspendDialogInfo= */ (SuspendDialogInfo) null);
     assertThat(packageManager.isPackageSuspended(TEST_PACKAGE_NAME)).isFalse();
   }
 
@@ -2944,7 +2980,28 @@ public class ShadowPackageManagerTest {
           /* suspended= */ true,
           /* appExtras= */ null,
           /* launcherExtras= */ null,
-          /* dialogMessage= */ null);
+          /* dialogMessage= */ (String) null);
+      fail("Should have thrown UnsupportedOperationException");
+    } catch (UnsupportedOperationException expected) {
+    }
+  }
+
+  @Test
+  @Config(minSdk = android.os.Build.VERSION_CODES.Q)
+  public void setPackagesSuspended_withProfileOwner_suspendDialogInfo_shouldThrow() {
+    DevicePolicyManager devicePolicyManager =
+        (DevicePolicyManager)
+            ApplicationProvider.getApplicationContext()
+                .getSystemService(Context.DEVICE_POLICY_SERVICE);
+    shadowOf(devicePolicyManager)
+        .setProfileOwner(new ComponentName("com.profile.owner", "ProfileOwnerClass"));
+    try {
+      setPackagesSuspended(
+          new String[] {TEST_PACKAGE_NAME},
+          /* suspended= */ true,
+          /* appExtras= */ null,
+          /* launcherExtras= */ null,
+          /* suspendDialogInfo= */ (SuspendDialogInfo) null);
       fail("Should have thrown UnsupportedOperationException");
     } catch (UnsupportedOperationException expected) {
     }
@@ -2968,7 +3025,31 @@ public class ShadowPackageManagerTest {
           /* suspended= */ true,
           /* appExtras= */ null,
           /* launcherExtras= */ null,
-          /* dialogMessage= */ null);
+          /* dialogMessage= */ (String) null);
+      fail("Should have thrown UnsupportedOperationException");
+    } catch (UnsupportedOperationException expected) {
+    }
+  }
+
+  @Test
+  @Config(minSdk = android.os.Build.VERSION_CODES.Q)
+  public void setPackagesSuspended_withDeviceOwner_suspendDialogInfo_shouldThrow() {
+    DevicePolicyManager devicePolicyManager =
+        (DevicePolicyManager)
+            ApplicationProvider.getApplicationContext()
+                .getSystemService(Context.DEVICE_POLICY_SERVICE);
+    shadowOf(devicePolicyManager)
+        .setDeviceOwner(new ComponentName("com.device.owner", "DeviceOwnerClass"));
+    // Robolectric uses a random UID (see ShadowProcess#getRandomApplicationUid) that falls within
+    // the range of the system user, so the device owner is on the current user and hence apps
+    // cannot be suspended.
+    try {
+      setPackagesSuspended(
+          new String[] {TEST_PACKAGE_NAME},
+          /* suspended= */ true,
+          /* appExtras= */ null,
+          /* launcherExtras= */ null,
+          /* suspendDialogInfo= */ (SuspendDialogInfo) null);
       fail("Should have thrown UnsupportedOperationException");
     } catch (UnsupportedOperationException expected) {
     }
@@ -2997,7 +3078,47 @@ public class ShadowPackageManagerTest {
                 /* suspended= */ true,
                 /* appExtras= */ null,
                 /* launcherExtras= */ null,
-                /* dialogMessage= */ null))
+                /* dialogMessage= */ (String) null))
+        .asList()
+        .containsExactly(
+            "com.nonexistent.package",
+            "android",
+            ApplicationProvider.getApplicationContext().getPackageName());
+
+    assertThat(packageManager.isPackageSuspended("com.suspendable.package1")).isTrue();
+    assertThat(packageManager.isPackageSuspended("android")).isFalse();
+    assertThat(packageManager.isPackageSuspended("com.suspendable.package2")).isTrue();
+    assertThat(
+            packageManager.isPackageSuspended(
+                ApplicationProvider.getApplicationContext().getPackageName()))
+        .isFalse();
+  }
+
+  @Test
+  @Config(minSdk = android.os.Build.VERSION_CODES.Q)
+  public void
+      setPackagesSuspended_suspendDialogInfo_shouldSuspendSuspendablePackagesAndReturnTheRest()
+          throws NameNotFoundException {
+    shadowOf(packageManager).installPackage(createPackageInfoWithPackageName("android"));
+    shadowOf(packageManager)
+        .installPackage(createPackageInfoWithPackageName("com.suspendable.package1"));
+    shadowOf(packageManager)
+        .installPackage(createPackageInfoWithPackageName("com.suspendable.package2"));
+
+    assertThat(
+            setPackagesSuspended(
+                new String[] {
+                  "com.nonexistent.package", // Unsuspenable (app doesn't exist).
+                  "com.suspendable.package1",
+                  "android", // Unsuspendable (platform package).
+                  "com.suspendable.package2",
+                  ApplicationProvider.getApplicationContext()
+                      .getPackageName() // Unsuspendable (caller's package).
+                },
+                /* suspended= */ true,
+                /* appExtras= */ null,
+                /* launcherExtras= */ null,
+                /* suspendDialogInfo= */ (SuspendDialogInfo) null))
         .asList()
         .containsExactly(
             "com.nonexistent.package",
@@ -3056,7 +3177,7 @@ public class ShadowPackageManagerTest {
         /* suspended= */ false,
         /* appExtras= */ null,
         /* launcherExtras= */ null,
-        /* dialogMessage= */ null);
+        /* dialogMessage= */ (String) null);
 
     assertThat(
             setPackagesSuspended(
@@ -3071,7 +3192,7 @@ public class ShadowPackageManagerTest {
                 /* suspended= */ false,
                 /* appExtras= */ null,
                 /* launcherExtras= */ null,
-                /* dialogMessage= */ null))
+                /* dialogMessage= */ (String) null))
         .asList()
         .containsExactly(
             "com.nonexistent.package",
@@ -3130,6 +3251,32 @@ public class ShadowPackageManagerTest {
 
     assertThat(setting.isSuspended()).isTrue();
     assertThat(setting.getDialogMessage()).isEqualTo("Dialog message");
+    assertThat(setting.getSuspendedAppExtras().getString("key")).isEqualTo("value");
+    assertThat(setting.getSuspendedLauncherExtras().getInt("number")).isEqualTo(7);
+  }
+
+  @Test
+  @Config(minSdk = android.os.Build.VERSION_CODES.Q)
+  public void
+      getPackageSetting_installedSuspendedPackage_dialogInfo_shouldReturnSuspendedSetting() {
+    shadowOf(packageManager).installPackage(createPackageInfoWithPackageName(TEST_PACKAGE_NAME));
+    PersistableBundle appExtras = new PersistableBundle();
+    appExtras.putString("key", "value");
+    PersistableBundle launcherExtras = new PersistableBundle();
+    launcherExtras.putInt("number", 7);
+    setPackagesSuspended(
+        new String[] {TEST_PACKAGE_NAME},
+        true,
+        appExtras,
+        launcherExtras,
+        new SuspendDialogInfo.Builder().setMessage("Dialog message").build());
+
+    PackageSetting setting = shadowOf(packageManager).getPackageSetting(TEST_PACKAGE_NAME);
+
+    assertThat(setting.isSuspended()).isTrue();
+    assertThat(setting.getDialogMessage()).isNull();
+    assertThat(setting.getDialogInfo())
+        .isEqualTo(new SuspendDialogInfo.Builder().setMessage("Dialog message").build());
     assertThat(setting.getSuspendedAppExtras().getString("key")).isEqualTo("value");
     assertThat(setting.getSuspendedLauncherExtras().getInt("number")).isEqualTo(7);
   }
@@ -3278,5 +3425,15 @@ public class ShadowPackageManagerTest {
   public String[] setPackagesSuspended(String[] packageNames, boolean suspended, PersistableBundle appExtras, PersistableBundle launcherExtras, String dialogMessage) {
     return packageManager.setPackagesSuspended(
         packageNames, suspended, appExtras, launcherExtras, dialogMessage);
+  }
+
+  public String[] setPackagesSuspended(
+      String[] packageNames,
+      boolean suspended,
+      PersistableBundle appExtras,
+      PersistableBundle launcherExtras,
+      Parcelable suspendDialogInfo) {
+    return packageManager.setPackagesSuspended(
+        packageNames, suspended, appExtras, launcherExtras, (SuspendDialogInfo) suspendDialogInfo);
   }
 }
