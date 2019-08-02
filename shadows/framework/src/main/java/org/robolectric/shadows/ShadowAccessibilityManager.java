@@ -12,8 +12,11 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
 import android.util.Log;
+import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityManager;
 import android.view.accessibility.IAccessibilityManager;
+import com.google.common.collect.ImmutableList;
+import java.util.ArrayList;
 import java.util.List;
 import org.robolectric.annotation.HiddenApi;
 import org.robolectric.annotation.Implementation;
@@ -30,6 +33,7 @@ public class ShadowAccessibilityManager {
   private static final Object sInstanceSync = new Object();
 
   @RealObject AccessibilityManager realAccessibilityManager;
+  private final List<AccessibilityEvent> sentAccessibilityEvents = new ArrayList<>();
   private boolean enabled;
   private List<AccessibilityServiceInfo> installedAccessibilityServiceList;
   private List<AccessibilityServiceInfo> enabledAccessibilityServiceList;
@@ -113,6 +117,17 @@ public class ShadowAccessibilityManager {
 
   public void setInstalledAccessibilityServiceList(List<AccessibilityServiceInfo> installedAccessibilityServiceList) {
     this.installedAccessibilityServiceList = installedAccessibilityServiceList;
+  }
+
+  @Implementation
+  protected void sendAccessibilityEvent(AccessibilityEvent event) {
+    sentAccessibilityEvents.add(event);
+    Shadow.directlyOn(realAccessibilityManager, AccessibilityManager.class)
+        .sendAccessibilityEvent(event);
+  }
+
+  public ImmutableList<AccessibilityEvent> getSentAccessibilityEvents() {
+    return ImmutableList.copyOf(sentAccessibilityEvents);
   }
 
   @Implementation
